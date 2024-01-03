@@ -217,7 +217,7 @@ def plot_grads(dir_name):
         plt.ylabel('Average Gradient Norm')
         # plt.title('average norm of gradients for epochs {} to {}'.format(i, i+5))
         #save figures by making a new sub folder in the same directory that contains trackables.pickle
-        plt.grid(b=True, which='major', color='#666666', linestyle='-', alpha=0.2)
+        plt.grid(visible=True, which='major', color='#666666', linestyle='-', alpha=0.2)
         # plt.minorticks_on() 
         # plt.grid(b=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
         plt.savefig(f'{plots}/grads_{i}_{i+5}.pdf', bbox_inches='tight')
@@ -552,7 +552,7 @@ if __name__ == "__main__":
         os.mkdir(os.path.join(directory_name, "plots"))
 
     #set font to latex style and increase font size by 2
-    plt.rc('text', usetex=True)
+    # plt.rc('text', usetex=True)
     plt.rc('font', family='serif')
     plt.rcParams.update({'font.size': 14})
 
