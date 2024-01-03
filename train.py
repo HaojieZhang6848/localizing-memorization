@@ -182,7 +182,7 @@ def single_epoch(model, optimizer, loader, loss_fn, scheduler, noise_mask = None
             # \n \t\t Dr Loss Clean = {clean_loss_dr:.4f} \t Noisy = {noisy_loss_dr:.4f} 
 
     
-    trackables = grads_to_norms(trackables)
+    # trackables = grads_to_norms(trackables)
     return trackables
 
 def train(args, pre_dict):
@@ -259,7 +259,10 @@ def dir_to_args(args):
     args["sched"] = f_remaining.split("_")[6]
     args["seed"] = int(f_remaining.split("_")[8])
     args["augmentation"] = int(f_remaining.split("_")[10])
-    args["cscore"] = float(f_remaining.split("_")[12])
+    try:
+        args["cscore"] = float(f_remaining.split("_")[12])
+    except:
+        pass
     return args
 
 if __name__ == "__main__":
