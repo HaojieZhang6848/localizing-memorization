@@ -1,0 +1,6 @@
+logs/cifar10/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_5_aug_0
+logs/cifar10/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_4_aug_0
+logs/cifar10/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_6_aug_0
+logs/svhn/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_5_aug_0
+logs/svhn/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_4_aug_0
+logs/svhn/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_6_aug_0
