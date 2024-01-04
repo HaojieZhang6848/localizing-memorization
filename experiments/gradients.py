@@ -7,6 +7,9 @@ from layer_groups import *
 
 
 def get_all_grads(trackables_filename):
+    """_summary_
+    返回的tensor_of_norms_total, tensor_of_norms_clean, tensor_of_norms_noisy的shape是num_epochs * len(weight_groups)
+    """  
     model_type = "resnet50" if "resnet50" in trackables_filename else "vit" if "vit" in trackables_filename else "resnet9"
     weight_groups = {"vit":vit_groups, "resnet50":resnet50_groups,"resnet9":resnet9_groups}[model_type]
     #trackables is a pickle file name. We will load that pickle file and return the gradients
@@ -19,6 +22,7 @@ def get_all_grads(trackables_filename):
 
 
     # num_epochs = len(clean_total_1_grads_all_epochs) 
+    # 训练的epoch的数量
     num_epochs = len(trackables["clean_total_1_grads_all_epochs"])
 
     #len gg[0] = len(model.named_parameters()) 
@@ -30,9 +34,12 @@ def get_all_grads(trackables_filename):
 
     #weight_groups is a dictionary with keys as index of layer and values as the list of parameters in that layer
     #get all model parameters by combining list of all values in weight_groups
+    
+    # 获得模型中所有的参数
     model_parameters = [val for sublist in weight_groups.values() for val in sublist]
     print(model_parameters)
 
+    # 每一个epoch，每一个layer_group的梯度norm
     tensor_of_norms_total = np.zeros((num_epochs, len(weight_groups)))
     tensor_of_norms_clean = np.zeros((num_epochs, len(weight_groups)))
     tensor_of_norms_noisy = np.zeros((num_epochs, len(weight_groups)))
@@ -48,6 +55,7 @@ def get_all_grads(trackables_filename):
         # noisy_dr_grads = trackables["noisy_dr_grads_all_epochs"][epoch]
         # total_dr_grads = trackables["total_dr_grads_all_epochs"][epoch]
 
+        # 把每个layer_group中的所有参数的梯度norm加起来，然后除以参数的个数，得到一个layer_group的梯度norm
         param_counter = 0
         for index in weight_groups:
             all_params = weight_groups[index]
@@ -55,6 +63,7 @@ def get_all_grads(trackables_filename):
             for i in range(num_params):
                 c,n,t = clean_total_1_grads[param_counter], noisy_total_1_grads[param_counter], total_total_grads[param_counter]
                 param_counter += 1
+                # 对参数的梯度norm进行归一化
                 tensor_of_norms_total[epoch, index] += np.linalg.norm(t)/np.sqrt(len(t))
                 tensor_of_norms_clean[epoch, index] += np.linalg.norm(c)/np.sqrt(len(c))
                 tensor_of_norms_noisy[epoch, index] += np.linalg.norm(n)/np.sqrt(len(n))
@@ -62,6 +71,11 @@ def get_all_grads(trackables_filename):
     return tensor_of_norms_total, tensor_of_norms_clean, tensor_of_norms_noisy
 
 def get_all_grads_cosine_similarity(trackables_filename):
+    """
+    返回的tensor_cosine_similarity_total的shape是num_epochs * len(weight_groups)
+    
+    每一个元素代表在某一个epoch中,某一个layer_group,干净数据和噪声数据的梯度的cosine similarity
+    """
     model_type = "resnet50" if "resnet50" in trackables_filename else "vit" if "vit" in trackables_filename else "resnet9"
     weight_groups = {"vit":vit_groups, "resnet50":resnet50_groups,"resnet9":resnet9_groups}[model_type]
     #trackables is a pickle file name. We will load that pickle file and return the gradients
@@ -74,9 +88,10 @@ def get_all_grads_cosine_similarity(trackables_filename):
 
 
     # num_epochs = len(clean_total_1_grads_all_epochs) 
+    # 训练的epoch的数量
     num_epochs = len(trackables["clean_total_1_grads_all_epochs"])
 
-    
+    # 模型的所有参数
     model_parameters = [val for sublist in weight_groups.values() for val in sublist]
     print(model_parameters)
 
@@ -88,6 +103,7 @@ def get_all_grads_cosine_similarity(trackables_filename):
         clean_total_1_grads = trackables["clean_total_1_grads_all_epochs"][epoch]
         noisy_total_1_grads = trackables["noisy_total_1_grads_all_epochs"][epoch]
         
+        # 把来自同一个layer_group的所有参数的梯度的cosine similarity加起来，然后除以layer_group里参数的个数，得到一个layer_group的梯度的cosine similarity
         param_counter = 0
         for index in weight_groups:
             all_params = weight_groups[index]

@@ -44,6 +44,7 @@ def update_gradients(grads, model):
         for param in model.parameters():
             grads.append(param.grad.view(-1).detach().cpu())
     else:
+        # 将这个batch中每个参数的梯度，与之前batch的梯度相加
         for i,param in enumerate(model.parameters()):
             grads[i] += (param.grad.view(-1).detach().cpu())
     
@@ -91,28 +92,34 @@ def update_trackables(model, optimizer, loss_fn, preds, targets, ratio, trackabl
     loss_clean = ratio*loss_fn(preds, targets)
     trackables[f'{name}_loss'] += loss_clean.cpu().item()
     loss_clean.backward(retain_graph=True)
+    # 在update_gradients函数中，得到这个batch中每个参数的梯度，并将其与之前batch的梯度相加
     trackables[f'{name}_grads'] = update_gradients(trackables[f'{name}_grads'], model)
     optimizer.zero_grad()
     return trackables
 
 def single_epoch(model, optimizer, loader, loss_fn, scheduler, noise_mask = None, track_gradients = False, epoch = 0):
+    # 创建trackables以记录每个epoch的的数据
     trackables = get_trackables_single_epoch()
     clean_num, noisy_num = noise_mask.shape[0] - noise_mask.sum(), noise_mask.sum()
     for ims, labs, ids in loader:
         optimizer.zero_grad(set_to_none=True)
         ims, labs = ims.cuda(), labs.cuda()
         
+        # 前向传播
         out = model(ims)
+        
+        # 干净和嘈杂(记忆)样本的比例
         noisy_ids = noise_mask[ids]
         clean_ids = 1 - noisy_ids
-        
         clean_ratio = clean_ids.sum()/clean_ids.shape[0]
         noisy_ratio = 1 - clean_ratio
         
         # Clean Examples
+        # 样本中的干净样本
         preds, targets, ratio = out[clean_ids==1], labs[clean_ids==1], clean_ratio
         
         ## get full grads
+        ## 对于干净样本，得到每个参数的梯度，并将其存储在trackables中
         trackables = update_trackables(model, optimizer, loss_fn, preds, targets, ratio, trackables, 'clean_total_1')
         assert_no_grads(model)
 
@@ -129,9 +136,11 @@ def single_epoch(model, optimizer, loader, loss_fn, scheduler, noise_mask = None
         
 
         # Noisy Examples
+        # 样本中的嘈杂样本
         preds, targets, ratio = out[clean_ids==0], labs[clean_ids==0], noisy_ratio
 
         ## get full grads
+        ## 对于嘈杂样本，得到每个参数的梯度，并将其存储在trackables中
         trackables = update_trackables(model, optimizer, loss_fn, preds, targets, ratio, trackables, 'noisy_total_1')
         assert_no_grads(model)
         # trackables = update_trackables(model, optimizer, loss_fn, preds[preds.shape[0]//2:], targets[preds.shape[0]//2:], ratio/2, trackables, 'noisy_total_2')
@@ -146,12 +155,14 @@ def single_epoch(model, optimizer, loader, loss_fn, scheduler, noise_mask = None
         # assert_no_grads(model)
         
         # Now we will actually do the optimization step
+        ## 得到loss，并进行反向传播
         loss = loss_fn(out, labs)
         trackables['total_loss'] += loss.cpu().item()
         loss.backward()
         trackables['total_total_grads'] = update_gradients(trackables['total_total_grads'], model)
         optimizer.step()
         
+        # 计算这个batch中，干净样本和嘈杂样本的正确数量
         trackables['total_correct'] += (out.argmax(1) == labs).sum().cpu().item()
         trackables['clean_correct'] += (out.argmax(1) == labs)[clean_ids==1].sum().cpu().item()
         trackables['noisy_correct'] += (out.argmax(1) == labs)[clean_ids==0].sum().cpu().item()
@@ -165,6 +176,7 @@ def single_epoch(model, optimizer, loader, loss_fn, scheduler, noise_mask = None
 
     # print(clean_grads[0][0],noisy_grads[0][0], total_grads[0][0], clean_grads[0][0]+noisy_grads[0][0])
     
+    ## 将各个batch的信息综合起来，作为这个epoch的信息
     acc = trackables['total_correct'] / trackables['total_num']
     clean_acc = trackables['clean_correct'] / trackables['clean_num']
     noisy_acc = trackables['noisy_correct'] / trackables['noisy_num']
@@ -182,7 +194,7 @@ def single_epoch(model, optimizer, loader, loss_fn, scheduler, noise_mask = None
             # \n \t\t Dr Loss Clean = {clean_loss_dr:.4f} \t Noisy = {noisy_loss_dr:.4f} 
 
     
-    # trackables = grads_to_norms(trackables)
+    # 返回这个epoch的信息
     return trackables
 
 def train(args, pre_dict):
@@ -195,12 +207,15 @@ def train(args, pre_dict):
     in_channels = 1 if args["dataset1"] == "mnist" else 3
     image_size = 28 if args["dataset1"] == "mnist" and args["augmentation"]==0 else 32
 
+    # 加载模型
     model = get_model(args["model_type"], NUM_CLASSES=classes_mapper[args["dataset1"]], in_channels=in_channels, image_size=image_size)
 
+    # dataloader
     train_loader = pre_dict["train_loader"]
     test_loader = pre_dict["test_loader"]
+    
+    # 加载优化器和学习率调度器
     optimizer = SGD(model.parameters(), lr=args["lr1"], momentum=0.9, weight_decay=5e-4)
-
     scheduler, EPOCHS = get_scheduler_epochs("cosine", optimizer, train_loader, max_epochs = args["num_epochs"])
 
     loader = train_loader
@@ -210,21 +225,27 @@ def train(args, pre_dict):
     trackables_all_epochs["noise_mask"] = noise_mask
     all_models = [copy.deepcopy(model.state_dict())]
 
+    # 损失函数
     loss_fn = nn.CrossEntropyLoss(label_smoothing=0)
 
     for ep in range(EPOCHS):
+        # 训练一个epoch，并得到这个epoch中梯度，正确率，损失等信息
         trackables = single_epoch(model, optimizer, loader, loss_fn, scheduler, noise_mask = noise_mask, track_gradients=True, epoch=ep)
+        # 在测试集上测试模型
         eval_rets = eval(model, test_loader, eval_mode=True)
         trackables["eval"] = eval_rets
         
+        # 将这个epoch得到的trackables信息，存储在trackables_all_epochs中
         for key in trackables:
             full_key = f'{key}_all_epochs'
             if full_key not in trackables_all_epochs:
                 trackables_all_epochs[full_key] = []
             trackables_all_epochs[full_key].append(trackables[key])
         
+        # 将这个epoch的模型存储在all_models中
         all_models.append(copy.deepcopy(model.state_dict()))
     
+    # 返回最终训练完成的模型，所有epoch的模型，所有epoch的trackables信息
     return model, all_models, trackables_all_epochs
 
 
@@ -233,9 +254,12 @@ def trainer(all_args, filename):
     print(filename)
     all_args["noise_2"] = all_args["noise_1"]
     all_args["minority_2"] = all_args["minority_1"]
+    # 加载数据集和dataloader
     pre_dict, ft_dict = return_loaders(all_args, get_frac = False, aug=all_args["augmentation"])
+    # 训练模型
     model, all_models, trackables_all_epochs = train(all_args, pre_dict)
     
+    # 将所有epoch的模型和trackables信息存储在文件中，供下游的experiments/plotter.py使用
     with open(f'{filename}trackables.pickle', 'wb') as handle:
         pickle.dump(trackables_all_epochs, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
@@ -262,12 +286,12 @@ def dir_to_args(args):
     try:
         args["cscore"] = float(f_remaining.split("_")[12])
     except:
-        pass
+        args["cscore"] = 0.0
     return args
 
 if __name__ == "__main__":
     # wandb.init(project='test'),
-
+    # 初始化各种参数
     parser = params.parse_args()
     args = parser.parse_args()
     args = params.add_config(args) if args.config_file != None else args
@@ -276,6 +300,7 @@ if __name__ == "__main__":
     args["dataset2"] = args["dataset1"]
     if args["model_type"] == "vit": args["batch_size"] = 128
     
+    # 检查是否已经训练过这个模型
     filename = f'logs/{args["dataset1"]}/{args["model_type"]}_lr_{args["lr1"]}_noise_{args["noise_1"]}_{args["model_type"]}_{args["sched"]}_seed_{args["seed"]}_aug_{args["augmentation"]}_cscore_{args["cscore"]}/'
     model_pickle = f'{filename}models.pickle'
     if (os.path.exists(model_pickle)):
@@ -285,9 +310,12 @@ if __name__ == "__main__":
     
     if not os.path.exists(filename):
         os.makedirs(filename)
+        
+    # 设置随机种子
     seed_everything(args["seed"])
 
     sys.stdout = MyLogger(f"{filename}/out.log", "a")
     print(args)
 
+    # 训练模型+梯度核算+保存结果到文件
     trainer(args, filename)

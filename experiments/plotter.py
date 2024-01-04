@@ -155,6 +155,7 @@ def plot_grads(dir_name):
 
     # we need to get gradients for all the three directories
     #find names of other two directories
+    # 获得三个种子（三次实验）的保存文件夹
     seed_index = dir_name.rfind("seed_") + 5
     current_seed = int(dir_name[seed_index])
     dir_2 = dir_name[:seed_index] + str(current_seed + 1) + dir_name[seed_index + 1:]
@@ -162,8 +163,10 @@ def plot_grads(dir_name):
 
     gt, gc, gn = [], [], []
     for dir in [dir_name, dir_2, dir_3]:
+        # 每一次实验的trackables.pickle文件
         trackables_filename = os.path.join(dir, "trackables.pickle")
         if os.path.exists(trackables_filename):
+            # 对于每一次实验，获得总梯度、干净样本梯度、噪声样本的梯度
             grads_total, grads_clean, grads_noisy = get_all_grads(trackables_filename)
             gt.append(grads_total)
             gc.append(grads_clean)
@@ -171,6 +174,7 @@ def plot_grads(dir_name):
 
 
     #get the mean of the three directories
+    # 对三次实验的梯度取平均
     grads_total = np.mean(gt, axis=0)
     grads_clean = np.mean(gc, axis=0)
     grads_noisy = np.mean(gn, axis=0)
@@ -190,6 +194,7 @@ def plot_grads(dir_name):
 
     for i in range(0, num_epochs, 5):
         #get the mean of the next 5 epochs
+        # 每5个epoch取平均，画一张图以比较总梯度，干净样本梯度，噪声样本梯度
         mean_total = np.mean(grads_total[i:i+5], axis=0)
         mean_clean = np.mean(grads_clean[i:i+5], axis=0)
         mean_noisy = np.mean(grads_noisy[i:i+5], axis=0)
@@ -507,6 +512,7 @@ def plot_gradient_similarity(directory_name):
 
     # we need to get gradients for all the three directories
     #find names of other two directories
+    # 获得三个种子（三次实验）的保存文件夹
     seed_index = directory_name.rfind("seed_") + 5
     current_seed = int(directory_name[seed_index])
     dir_2 = directory_name[:seed_index] + str(current_seed + 1) + directory_name[seed_index + 1:]
@@ -514,19 +520,23 @@ def plot_gradient_similarity(directory_name):
 
     gt = []
     for dir in [directory_name, dir_2, dir_3]:
+        # 每一次实验的trackables.pickle文件
         trackables_filename = os.path.join(dir, "trackables.pickle")
         if os.path.exists(trackables_filename):
+            # 对于每一次实验，获得每一个epoch，每一个layer_group下，干净样本梯度和噪声样本梯度的余弦相似度
             grads_cosine_similarities = get_all_grads_cosine_similarity(trackables_filename)
             gt.append(grads_cosine_similarities)
 
 
     #get the mean of the three directories
+    # 对三次实验的余弦相似度取平均
     grads_total = np.mean(gt, axis=0)
 
     #create a 2d array of the cosine similarities
     #each row is an epoch
     #each column is a group
 
+    # 画热力图
     import seaborn as sns
     plt.figure(figsize=(4,3))
 
