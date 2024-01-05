@@ -434,7 +434,7 @@ def plot_pearson_correlation(directory_name):
     plt.savefig(os.path.join(plots, "pearson_correlation.pdf"), bbox_inches='tight')
 
 
-def plot_retraining_curves(directory_name):
+def plot_retraining_curves(directory_name, dst_file, seed):
     #load all model weights
     #load all trackables
     #for each model, get the pearson correlation between the change in weights over an epoch and the change in loss on noisy and clean examples for that epoch
@@ -442,23 +442,13 @@ def plot_retraining_curves(directory_name):
     #average over 3 seeds
     #find names of other two directories
     seed_index = directory_name.rfind("seed_") + 5
-    current_seed = int(directory_name[seed_index])
-    dir_2 = directory_name[:seed_index] + str(current_seed + 1) + directory_name[seed_index + 1:]
-    dir_3 = directory_name[:seed_index] + str(current_seed + 2) + directory_name[seed_index + 1:]
+    dir = directory_name[:seed_index] + str(seed) + directory_name[seed_index + 1:]
 
     model_type = "resnet50" if "resnet50" in directory_name else "vit" if "vit" in directory_name else "resnet9"
     weight_groups = {"vit":vit_groups, "resnet50":resnet50_groups,"resnet9":resnet9_groups}[model_type]
 
-    # retraining_files = []
-    for dir in [directory_name, dir_2, dir_3]:
-        if os.path.exists(os.path.join(dir, "reatraining.pickle")):
-            retraining_file_name = os.path.join(dir, "reatraining.pickle")
-            #load pickle
-            with open(retraining_file_name, 'rb') as f:
-                retraining_file = pickle.load(f)["clean_training"]
-                # retraining_files.append(retraining_file)
-        break 
-        
+    with open(os.path.join(dir, "retraining.pickle"), 'rb') as f:
+        retraining_file = pickle.load(f)["clean_training"]
 
     from matplotlib import pyplot as plt
     fig, axs = plt.subplots(3, 3, figsize=(4,4))
@@ -500,7 +490,8 @@ def plot_retraining_curves(directory_name):
     fig.legend(legend_labels, loc='upper center', ncol=2, bbox_to_anchor=(0.5, 1.15), bbox_transform=fig.transFigure, fontsize=14)
 
     plots = os.path.join(directory_name, "plots")
-    plt.savefig(f'{plots}/retraining.pdf', bbox_inches='tight')
+    plt.savefig(dst_file, bbox_inches='tight')
+    # plt.savefig(f'{plots}/retraining.pdf', bbox_inches='tight')
 
 
 def plot_gradient_similarity(directory_name):
