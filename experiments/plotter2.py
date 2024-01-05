@@ -6,14 +6,17 @@ import numpy as np
 import pickle
 from matplotlib import pyplot as plt
 
-datasets = ["mnist", "cifar10", "svhn"]
-datasets = ["cifar10"]
-model_types = ["resnet9","resnet50", "vit"]
-noise_types = [0.1, 0.2, 0.05]
-noise_types = [0.05]
-seeds = [4]
+# datasets = ["mnist", "cifar10", "svhn"]
+datasets = ["cifar10", "mnist", "svhn"]
+# model_types = ["resnet9","resnet50", "vit"]
+model_types = ["resnet9"]
+# noise_types = [0.1, 0.2, 0.05]
+# noise_types = [0.05]
+noise_types = [0.1]
+retraining_seeds = [4, 5, 6]
 
-root = "/home/pratyus2/scratch/projects/localizing_memorization/"
+
+root = os.getcwd() + "/"
 
 # for graphs on gradient similarity, we want all models for a given noise together. That is three subfigures for each dataset+noise rate
 def plot_grads_helper(dir_name):
@@ -60,23 +63,23 @@ def plot_combined_grads_figure(dataset, noise):
         mean_total, mean_clean, mean_noisy, mean_std_total, mean_std_clean, mean_std_noisy = plot_grads_helper(dir_name)
         num_groups = len(mean_total)
         #plot the average of the three directories across all epochs
-        axs[model_types.index(model_type)].plot(range(num_groups), mean_total, color='blue')
-        axs[model_types.index(model_type)].plot(range(num_groups), mean_clean, color='green')
-        axs[model_types.index(model_type)].plot(range(num_groups), mean_noisy, color='red')
+        axs[m].plot(range(num_groups), mean_total, color='blue')
+        axs[m].plot(range(num_groups), mean_clean, color='green')
+        axs[m].plot(range(num_groups), mean_noisy, color='red')
 
         #fill with std
-        axs[model_types.index(model_type)].fill_between(range(num_groups), mean_total - mean_std_total, mean_total + mean_std_total, color='blue', alpha=0.2)
-        axs[model_types.index(model_type)].fill_between(range(num_groups), mean_clean - mean_std_clean, mean_clean + mean_std_clean, color='green', alpha=0.2)
-        axs[model_types.index(model_type)].fill_between(range(num_groups), mean_noisy - mean_std_noisy, mean_noisy + mean_std_noisy, color='red', alpha=0.2)
+        axs[m].fill_between(range(num_groups), mean_total - mean_std_total, mean_total + mean_std_total, color='blue', alpha=0.2)
+        axs[m].fill_between(range(num_groups), mean_clean - mean_std_clean, mean_clean + mean_std_clean, color='green', alpha=0.2)
+        axs[m].fill_between(range(num_groups), mean_noisy - mean_std_noisy, mean_noisy + mean_std_noisy, color='red', alpha=0.2)
 
         # add legend
-        axs[model_types.index(model_type)].legend(['Total', 'Clean', 'Noisy'])
-        axs[model_types.index(model_type)].set_xlabel('Model Layer Depth')
-        axs[model_types.index(model_type)].set_ylabel('Total Gradient Norm')
-        axs[model_types.index(model_type)].set_title(f'{model_type} {dataset} {noise}')
-        axs[model_types.index(model_type)].grid(b=True, which='major', color='#666666', linestyle='-')
-        axs[model_types.index(model_type)].minorticks_on()
-        axs[model_types.index(model_type)].grid(b=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+        axs[m].legend(['Total', 'Clean', 'Noisy'])
+        axs[m].set_xlabel('Model Layer Depth')
+        axs[m].set_ylabel('Total Gradient Norm')
+        axs[m].set_title(f'{model_type} {dataset} {noise}')
+        axs[m].grid(b=True, which='major', color='#666666', linestyle='-')
+        axs[m].minorticks_on()
+        axs[m].grid(b=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
 
 
     plt.savefig(f'plots/grads_{dataset}_{noise}.pdf', bbox_inches='tight')
@@ -142,15 +145,15 @@ def plot_rewinding_helper(directory_name):
 
 
 def plot_combined_rewinding_figure(dataset, noise):
-    #create a figure with six subfigures (3 columns, 2 rows)
-    fig, axs = plt.subplots(2, 3, figsize=(12, 6.5))
+    #row代表clean和noisy，column代表model type
+    fig, axs = plt.subplots(2, len(model_types), figsize=(12, 6.5), squeeze=False)
 
     #get the three directories
     for m, model_type in enumerate(model_types):
-        dir_name = f'logs/{dataset}/{model_type}_lr_0.01_noise_{noise}_{model_type}_cosine_seed_4_aug_0'
+        dir_name = f'logs/{dataset}/{model_type}_lr_0.01_noise_{noise}_{model_type}_cosine_seed_4_aug_0_cscore_0.0'
         #get the average of the three directories across all epochs
         rewinding_clean, rewinding_noisy, rewinding_std_clean, rewinding_std_noisy = plot_rewinding_helper(dir_name)
-        num_lines = rewinding_clean.shape[0]
+        num_lines = min(rewinding_clean.shape[0],6)
         num_groups = rewinding_clean.shape[1]
         #plot clean in row 0, and noisy in row 1
         for i, ex_type in enumerate(["clean", "noisy"]):
@@ -175,15 +178,15 @@ def plot_combined_rewinding_figure(dataset, noise):
                 axs[i][m].fill_between(range(num_groups), mean - std, mean + std, color = c, alpha=0.2)
 
             #give heading "Epoch" to legend box and place it to the right of the figure outside it
-            if j == 2:
-                axs[i][j].legend(title = "Epoch", loc = 'center left', bbox_to_anchor = (1, 0.5))
+            if m + 1 == len(model_types):
+                axs[i][m].legend(title = "Epoch", loc = 'center left', bbox_to_anchor = (1, 0.5))
             if i == 1:
                 axs[i][m].set_xlabel('Model Layer Depth')
-            if j == 0:
+            if m == 0:
                 axs[i][m].set_ylabel('Accuracy')
             
             axs[i][m].set_title(f'{model_type.capitalize()} {ex_type.capitalize()}')
-            axs[i][m].grid(b=True, which='major', color='#666666', linestyle='-', alpha=0.2)
+            axs[i][m].grid(visible=True, which='major', color='#666666', linestyle='-', alpha=0.2)
             # axs[i][0].minorticks_on()
             # axs[i][0].grid(b=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
 
@@ -199,15 +202,82 @@ def plot_combined_retraining_figure(dataset):
         dir_name = f'{root}logs/{dataset}/resnet9_lr_0.01_noise_{noise}_resnet9_cosine_seed_4_aug_0_cscore_0.0'
         #get the average of the three directories across all epochs
         from plotter import plot_retraining_curves
-        plot_retraining_curves(dir_name, f'plots/retraining_{dataset}_{noise}.pdf')
+        for seed in retraining_seeds:
+            plot_retraining_curves(dir_name, f'plots/retraining_{dataset}_{noise}_seed_{seed}.pdf',seed=seed)
 
+def plot_training_dynamic_helper(dir_name):
+    #average over 3 seeds
+    #find names of other two directories
+    seed_index = dir_name.rfind("seed_") + 5
+    current_seed = int(dir_name[seed_index])
+    dir_2 = dir_name[:seed_index] + str(current_seed + 1) + dir_name[seed_index + 1:]
+    dir_3 = dir_name[:seed_index] + str(current_seed + 2) + dir_name[seed_index + 1:]
+    
+    total_acc_all_epochs = []
+    noisy_acc_all_epochs = []
+    clean_acc_all_epochs = []
+
+    for dir in [dir_name, dir_2, dir_3]:
+        trk_fname = os.path.join(root, dir, "trackables.pickle")
+        if os.path.exists(trk_fname):
+            with open(trk_fname, 'rb') as f:
+                trk = pickle.load(f)
+            total_correct_all_epochs, clean_correct_all_epochs, noisy_correct_all_epochs = np.array(trk["total_correct_all_epochs"]), np.array(trk["clean_correct_all_epochs"]), np.array(trk["noisy_correct_all_epochs"])
+            total_num_all_epochs, clean_num_all_epochs, noisy_num_all_epochs = np.array(trk["total_num_all_epochs"]), np.array(trk["clean_num_all_epochs"]), np.array(trk["noisy_num_all_epochs"])
+            total_acc_all_epochs.append(total_correct_all_epochs/total_num_all_epochs)
+            noisy_acc_all_epochs.append(noisy_correct_all_epochs/noisy_num_all_epochs)
+            clean_acc_all_epochs.append(clean_correct_all_epochs/clean_num_all_epochs)
+        else:
+            print("no trackables pickle found for ", dir)
+
+    total_acc_all_epochs = np.mean(total_acc_all_epochs, axis=0)
+    noisy_acc_all_epochs = np.mean(noisy_acc_all_epochs, axis=0)
+    clean_acc_all_epochs = np.mean(clean_acc_all_epochs, axis=0)
+    
+    return total_acc_all_epochs, noisy_acc_all_epochs, clean_acc_all_epochs
+
+def plot_training_dynamic_figure(dataset, noise):
+    #create a figure with three subfigures (column num is as many as model types)
+    fig, axs = plt.subplots(1, len(model_types), figsize=(12, 4), squeeze=False)
+
+    #get the three directories
+    for m, model_type in enumerate(model_types):
+        dir_name = f'logs/{dataset}/{model_type}_lr_0.01_noise_{noise}_{model_type}_cosine_seed_4_aug_0_cscore_0.0'
+        #get the average of the three directories across all epochs
+        total_acc_all_epochs, noisy_acc_all_epochs, clean_acc_all_epochs = plot_training_dynamic_helper(dir_name)
+        num_epochs = len(total_acc_all_epochs)
+        
+        if m+1 == len(model_types):
+            #plot the average of the three directories across all epochs
+            axs[0][m].plot(range(num_epochs), total_acc_all_epochs, color='blue')
+            axs[0][m].plot(range(num_epochs), clean_acc_all_epochs, color='green')
+            axs[0][m].plot(range(num_epochs), noisy_acc_all_epochs, color='red')
+
+            # add legend
+            axs[0][m].legend(['Total', 'Clean', 'Noisy'])
+            axs[0][m].set_xlabel('Epoch')
+            axs[0][m].set_ylabel('Accuracy')
+            axs[0][m].set_title(f'{model_type} {dataset} {noise}')
+            axs[0][m].grid(visible=True, which='major', color='#666666', linestyle='-')
+            axs[0][m].minorticks_on()
+            axs[0][m].grid(visible=True, which='minor', color='#999999', linestyle='-', alpha=0.2)
+
+
+    plt.savefig(f'plots/training_dynamic_{dataset}_{noise}.pdf', bbox_inches='tight')
 
 for dataset in datasets:
     for noise in noise_types:
-        # plot_combined_grads_figure(dataset, noise)
-        # plot_combined_retraining_figure(dataset)
         try:
-            # plot_combined_rewinding_figure(dataset, noise)
-            plot_combined_retraining_figure(dataset)
+            plot_training_dynamic_figure(dataset, noise)
         except:
-            print(f"Error with {dataset} {noise}")
+            pass
+        try:
+            plot_combined_rewinding_figure(dataset, noise)
+        except:
+            pass
+
+for dataset in datasets:
+    try:
+        plot_combined_retraining_figure(dataset)
+    except:
+        pass
