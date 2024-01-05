@@ -48,58 +48,51 @@ class ExampleTiedDropout(torch.nn.Module):
         self.mask_tensor = None
 
     def forward(self, X, idx, epoch = 0):
+        # 这里的idx参数应该是一个tensor，里面是样本的id，例如[3,5,8]，代表了选中了第3、5、8个样本
+        # 当idx中的样本被取到时，前p_fixed的神经元/通道是始终保留的，后面的神经元/通道中，约有随机的p_mem*shape个神经元/通道是保留的
+        # 当非idx中的样本被取到时，只前p_fixed的神经元/通道是始终保留的，后面的神经元/通道都是被dropout的
         if self.p_fixed == 1:
             return X
-
         if self.drop_mode == "train":
-            # create a mask based on the index (idx)
-
+            # 训练模式下，每个样本都有一个mask，每个样本会根据自己的mask进行dropout
             mask = torch.zeros_like(X).cpu()
-            shape = X.shape[1]
-
+            shape = X.shape[1] # 通道数量或神经元数量
             if epoch > 0:
-                #get mask from self.mask_tensor
+                # 之前已经计算过每个样本的mask，直接取出来就行
                 mask = self.mask_tensor[idx]
-
             elif epoch == 0:
-                #keep all neurons with index less than self.p_fixed*shape
-                mask[:, :int(self.p_fixed*shape)] = 1
-
-                # Fraction of elements to keep
+                mask[:, :int(self.p_fixed*shape)] = 1 # 前p_fixed的神经元/通道是始终保留的
                 p_mem = self.p_mem
 
-                # Generate a random mask for each row in the input tensor
+                # 除去前p_fixed的神经元/通道，剩余的神经元/通道数量。为这些神经元/通道生成mask
                 shape_of_mask = shape - int(self.p_fixed*shape)
-                for i in range(X.shape[0]):
+                for i in range(idx): # 创建每个被选中样本的mask
                     torch.manual_seed(idx[i].item())
+                    # 使用伯努利分布生成mask
+                    # 生成的mask里的每个元素，有p_mem的概率是1，有1-p_mem的概率是0
                     curr_mask = torch.bernoulli(torch.full((1, shape_of_mask), p_mem))
-                    #repeat curr_mask along dimension 2 and 3 to have the same shape as X
                     curr_mask = curr_mask.unsqueeze(-1).unsqueeze(-1)
+                    # 每个样本，前p_fixed的神经元/通道是始终保留的，后面的神经元/通道中，约有随机的p_mem*shape个神经元/通道是保留的
                     mask[i][int(self.p_fixed*shape):] = curr_mask
-                    # In an initial implementation, rather than repeating the same mask along all dimensions,
-                    # the following was done. This meant that we will randomly have 0s and 1s along different dimensions
-                    # removed this so that it preserves image pixel semantics.
-
-                    # mask[i][int(self.p_fixed*shape):] = torch.bernoulli(torch.full((1, shape_of_mask, X.shape[2], X.shape[3]), p_mem))
-                    
-
                 if self.mask_tensor is None:
                     self.mask_tensor = torch.zeros(self.max_id, X.shape[1], X.shape[2], X.shape[3])
                 #assign mask at positions given by idx
                 self.mask_tensor[idx] = mask
             
-            # Apply the mask to the input tensor
+            # 根据mask进行dropout
             X = X * mask.cuda()
 
 
         elif self.drop_mode == "test":
-            #At test time we will renormalize outputs from the non-fixed neurons based on the number of neuron sets
-            #we will keep the fixed neurons unmodified
+            # 在test模式下，我们会根据p_mem，对非固定的神经元/通道进行归一化
+            # 固定的神经元/通道不会进行归一化
             shape = X.shape[1]
             X[:, :int(self.p_fixed*shape)] = X[:, :int(self.p_fixed*shape)]
             X[:, int(self.p_fixed*shape):] = X[:, int(self.p_fixed*shape):]*self.p_mem
 
         elif self.drop_mode == "drop":
+            # 在drop模式下，会将非固定的神经元/通道全部置为0
+            # 固定的神经元/通道会进行放大
             shape = X.shape[1]
             X[:, int(self.p_fixed*shape):] = 0
             X[:, :int(self.p_fixed*shape)] = X[:, :int(self.p_fixed*shape)]*(self.p_fixed + self.p_mem)/self.p_fixed

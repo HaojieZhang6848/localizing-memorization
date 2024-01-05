@@ -210,11 +210,11 @@ def return_loaders(all_args, get_frac = True, shuffle = True, split_ratio = 0.5,
     if all_args["cscore"] > 0: 
         d1_tr, mask_noise1 = adjust_for_cscore(d1_tr, mask_noise1)
     
-    preloader = DataLoader(dataset=d1_tr, batch_size=batch_size, shuffle=shuffle, num_workers=12, prefetch_factor=2)
+    preloader = DataLoader(dataset=d1_tr, batch_size=batch_size, shuffle=shuffle, num_workers=12, prefetch_factor=4)
     
     if get_frac:
         d2_tr, mask_noise2, mask_rare2 = get_dset(split, all_args["dataset2"], all_args["noise_2"], indices2 , all_args["minority_2"], all_args["seed"], all_args["log_factor"], all_args["seed_superclass"], split_ratio= split_ratio, aug = aug)
-        ftloader = DataLoader(dataset=d2_tr, batch_size=batch_size, shuffle=shuffle, num_workers=12, prefetch_factor=2)
+        ftloader = DataLoader(dataset=d2_tr, batch_size=batch_size, shuffle=shuffle, num_workers=12, prefetch_factor=4)
     else:
         d2_tr, mask_noise2, mask_rare2 = None, None, None
         ftloader = None
@@ -224,10 +224,10 @@ def return_loaders(all_args, get_frac = True, shuffle = True, split_ratio = 0.5,
     #get test datasets
     split  = "te"
     d1, _, _ = get_dset(split, all_args["dataset1"], 0, None)
-    preloader_test = DataLoader(dataset=d1, batch_size=batch_size, shuffle=False, num_workers=12, prefetch_factor=2)
+    preloader_test = DataLoader(dataset=d1, batch_size=batch_size, shuffle=False, num_workers=12, prefetch_factor=4)
     if get_frac:
         d2, _, _ = get_dset(split, all_args["dataset2"], 0, None)
-        ftloader_test = DataLoader(dataset=d2, batch_size=batch_size, shuffle=False, num_workers=12, prefetch_factor=2)
+        ftloader_test = DataLoader(dataset=d2, batch_size=batch_size, shuffle=False, num_workers=12, prefetch_factor=4)
     else: 
         d2 = None
         ftloader_test = None
