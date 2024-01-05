@@ -19,15 +19,17 @@ def get_all_model_weights(model):
     return all_params_dict
 
 def eval_acc_change_in_all_weights(args, all_models, loader, reinit_epoch = 0):
-    model_init = get_model(args)
-    model_final = get_model(args)
+    in_channels= 3 if args["dataset1"] != "mnist" else 1
+    model_init = get_model(args['model_type'], in_channels = in_channels)
+    model_final = get_model(args['model_type'],in_channels = in_channels)
 
     all_evals = []
     
     #we need just the first and last models for this experiment
+    # 加载最后一个epoch的模型
     model_final.load_state_dict(all_models[-1])
     if reinit_epoch != -1:
-        model_init.load_state_dict(all_models[reinit_epoch])
+        model_init.load_state_dict(all_models[reinit_epoch]) # 加载要初始化到的epoch的模型
 
     all_params_dict_init = get_all_model_weights(model_init)
 
@@ -38,6 +40,8 @@ def eval_acc_change_in_all_weights(args, all_models, loader, reinit_epoch = 0):
     for index in weight_groups:
         new_model = copy.deepcopy(model_final)
         params_new = new_model.state_dict()
+        
+        # 对于每一层，将其参数初始化为reinit_epoch的参数，并评估在训练集上的准确率
         for key in weight_groups[index]:
             with torch.no_grad():
                 params_new[key] = all_params_dict_init[key]
@@ -49,19 +53,24 @@ def eval_acc_change_in_all_weights(args, all_models, loader, reinit_epoch = 0):
     return all_evals
 
 def layer_rewinding(args, filename):
+    # 加载训练数据
     pre_dict, ft_dict = return_loaders(args, get_frac = False, aug=args["augmentation"])
     
+    # 加载之前训练的模型
     with open(f'{filename}models.pickle', 'rb') as handle:
         all_models = pickle.load(handle)
     
+    # 训练集的dataloader
     loader = pre_dict["train_loader"]
     ep_all_evals = []
     
-    # for ep in range(0,len(all_models),10):
-    for ep in range(0,15,2):
+    # 对于epoch 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100，对层进行倒带后评估训练集上的准确率
+    for ep in range(0,len(all_models),10):
+        # 倒带并评估训练集上干净样本和嘈杂样本的准确率
         all_evals = eval_acc_change_in_all_weights(args, all_models, loader, reinit_epoch = ep)
         ep_all_evals.append(all_evals)
-
+    
+    # 保存结果
     with open(f'{filename}rewinding.pickle', 'wb') as handle:
         pickle.dump(ep_all_evals, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
@@ -99,15 +108,15 @@ if __name__ == "__main__":
     args["num_epochs"] = 100 if args["dataset1"] == "mnist" else args["num_epochs"]
     if args["model_type"] == "vit": args["batch_size"] = 128
     print(args)
-    filename = f'../logs/{args["dataset1"]}/{args["model_type"]}_lr_{args["lr1"]}_noise_{args["noise_1"]}_{args["model_type"]}_{args["sched"]}_seed_{args["seed"]}_aug_{args["augmentation"]}_cscore_{args["cscore"]}/'
+    filename = f'logs/{args["dataset1"]}/{args["model_type"]}_lr_{args["lr1"]}_noise_{args["noise_1"]}_{args["model_type"]}_{args["sched"]}_seed_{args["seed"]}_aug_{args["augmentation"]}_cscore_{args["cscore"]}/'
     
-    
+    os.makedirs(filename, exist_ok=True)
     assert (os.path.exists(filename))
 
     output_pickle = f'{filename}rewinding.pickle'
-    # if (os.path.exists(output_pickle)):
-    #     print("Already exists")
-    #     exit(0)
+    if (os.path.exists(output_pickle)):
+        print("Already exists")
+        exit(0)
 
     seed_everything(args["seed"])
 

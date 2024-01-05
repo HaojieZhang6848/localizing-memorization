@@ -106,7 +106,7 @@ def do_ft(model, train_loader, noise_mask, train_clean = True):
         print(f"Epoch: {ep} | Clean Accuracy {clean_acc:.4f} | Loss {loss: .4f} | Noisy Accuracy {noisy_acc:.4f}")
         if acc == 1:
             patience += 1
-        if patience >= 3:
+        if patience >= 5:
             break
     
     return clean_accs, noisy_accs
@@ -124,7 +124,8 @@ def train_model(model, train_loader):
     return model
 
 def layer_retraining(args, filename):
-    pre_dict, ft_dict = return_loaders(args, get_frac = False, aug=args["augmentation"], cscore=args["cscore"])
+    # 加载训练数据集
+    pre_dict, ft_dict = return_loaders(args, get_frac = False, aug=args["augmentation"])
     
     # with open(f'{filename}models.pickle', 'rb') as handle:
     #     all_models = pickle.load(handle)
@@ -132,7 +133,8 @@ def layer_retraining(args, filename):
     loader = pre_dict["train_loader"]
     noise_mask = pre_dict["noise_mask"]
 
-    model_init = get_model(args)
+    in_channels=3 if args["dataset1"] != "mnist" else 1
+    model_init = get_model(args["model_type"],in_channels = in_channels)
     model = copy.deepcopy(model_init)
 
     # all_evals = []
@@ -142,11 +144,13 @@ def layer_retraining(args, filename):
     # model_final.load_state_dict(all_models[-1])
     # model_init.load_state_dict(all_models[0])
 
+    # 将未训练过的模型的参数复制出来
     all_params_dict_init = get_all_model_weights(model_init)
     weight_groups = {"vit":vit_groups, "resnet50":resnet50_groups,"resnet9":resnet9_groups}[args["model_type"]]
 
     result_dict = {"noisy_training":{}, "clean_training":{}}
 
+    # 对每一层进行迭代
     for index in weight_groups:
         model = copy.deepcopy(model_final)
         params_new = model.state_dict()
@@ -154,6 +158,8 @@ def layer_retraining(args, filename):
         for key in params_new:
             params_new[key].requires_grad = False
 
+        # 将该层的参数回退到未训练过的模型的参数，并将其requires_grad设置为True
+        # 只有回退过的层才是可以训练的
         for key in weight_groups[index]:
             print(key)
             with torch.no_grad():
@@ -163,6 +169,7 @@ def layer_retraining(args, filename):
             # break
         params_new_clean = copy.deepcopy(params_new)
         # params_new_noisy = copy.deepcopy(params_new)
+        # 加载修改后的参数
         model.load_state_dict(params_new_clean)
         
 
@@ -179,8 +186,12 @@ def layer_retraining(args, filename):
         # import ipdb; ipdb.set_trace()
         # z = evaluate_mask(model, loader, 1 - noise_mask)
         
-        
-        clean_training = do_ft(model, loader, noise_mask = 1 - noise_mask, train_clean = True)
+        # 在干净的数据集上重新训练回退过的层
+        # 这里返回的clean_training的形状是(2, retrain_epoch_num)
+        # 第一个维度表示干净还是噪声数据，第二个维度表示重新训练的epoch
+        # 例如clean_training[0][0]表示在干净数据集上重新训练10个epoch后，模型在干净数据集上的准确率
+        # clean_training[1][0]表示在干净数据集上重新训练10个epoch后，模型在噪声数据集上的准确率
+        clean_training = do_ft(model, loader, noise_mask = noise_mask, train_clean = True)
         
         # model.load_state_dict(params_new_noisy)
         # model = copy.deepcopy(model_final)
@@ -198,7 +209,7 @@ def layer_retraining(args, filename):
         result_dict["clean_training"][index] = clean_training
 
 
-    with open(f'{filename}reatraining.pickle', 'wb') as handle:
+    with open(f'{filename}retraining.pickle', 'wb') as handle:
         pickle.dump(result_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
     
     return 0
@@ -235,7 +246,7 @@ if __name__ == "__main__":
     args["num_epochs"] = 100 if args["dataset1"] == "mnist" else args["num_epochs"]
     if args["model_type"] == "vit": args["batch_size"] = 128
     print(args)
-    filename = f'../logs/{args["dataset1"]}/{args["model_type"]}_lr_{args["lr1"]}_noise_{args["noise_1"]}_{args["model_type"]}_{args["sched"]}_seed_{args["seed"]}_aug_{args["augmentation"]}_cscore_{args["cscore"]}/'
+    filename = f'logs/{args["dataset1"]}/{args["model_type"]}_lr_{args["lr1"]}_noise_{args["noise_1"]}_{args["model_type"]}_{args["sched"]}_seed_{args["seed"]}_aug_{args["augmentation"]}_cscore_{args["cscore"]}/'
     if not (os.path.exists(filename)):
         os.makedirs(filename)
     

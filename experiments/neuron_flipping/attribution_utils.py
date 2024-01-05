@@ -62,6 +62,8 @@ def get_new_grads(model, x,y,current_example_index, robustify = False, n_EoT = 1
     n_EoT: number of steps for Expectation over transformation (gaussian noise)
     returns grads_list: dictionary of gradients corresponding to each parameter in the model
     '''
+    # 给batch中的每个样本添加随机的高斯噪声
+    # 这样做是为了避免基于梯度的搜索利用对抗性示例的普遍性来寻找关键神经元。
     grads_list = {}
     final_preds = None
     n_EoT = 1 if not robustify else n_EoT
@@ -76,11 +78,14 @@ def get_new_grads(model, x,y,current_example_index, robustify = False, n_EoT = 1
     
     final_preds /= n_EoT
 
-    loss = nn.CrossEntropyLoss(reduction = 'none')(final_preds, y)
+    # 这里的loss函数的构建和论文中6.1节中的公式一致
+    loss = nn.CrossEntropyLoss(reduction = 'none')(final_preds, y) # shape: (batch_size, )
     batch_size = y.shape[0]
     #for the example that we want to flip, we must reverse the loss while maintaing the population loss
     loss[current_example_index] *= -1*batch_size
     loss = loss.mean()
+    
+    # 进行反向传播，后续会用到梯度
     loss.backward()
 
     for name, param in (model.named_parameters()):
@@ -140,26 +145,29 @@ def modify_weights(model, max_param_name, max_param_index, channel_wise = "chann
 def flip_preds_loop_helper(saved_model, loader, batch, indices, batch_mask, eval_post_edit, channel_wise, objective, gaussian_noise, verbose, n_EoT, noise_mask):
     accs_list, iters_list, params_list, ids_list = [], [], [], []
     noisy_acc_list, clean_acc_list = [], []
-    all_ids = torch.arange(batch[0].shape[0])
-    # ipdb.set_trace()
+    all_ids = torch.arange(batch[0].shape[0]) # 相当于np.arange(batch_size)
+    # 对每个样本进行分析
     for num_examples_analyzed in tqdm(indices):
+        # 当前样本的index
         current_example_index = all_ids[batch_mask == 1][num_examples_analyzed]
         original_id = batch[2][current_example_index]
-
-        ## Minimum set of weights that can be changed
+        ## 拷贝一份模型用来置零神经元/通道，直到对于这个样本的预测被反转；并将模型设置为eval模式
         model = copy.deepcopy(saved_model)
         model.eval()
-        iters = 0
-        param_names = []
+        iters = 0 # 置零神经元/通道的次数
+        param_names = [] # 置零神经元/通道所在的参数的名称（层名）
         while True:
+            # 根据论文6.1节，减少样本所在batch的平均损失，但最大化要翻转的输入的损失
             grads_list, preds = get_new_grads(model, batch[0].cuda(), batch[1].cuda().long(),current_example_index, robustify = gaussian_noise, n_EoT = n_EoT)
-            if preds[current_example_index].argmax() != batch[1][current_example_index]:
+            # 如果当前样本的预测已经被反转，则停止置零神经元/通道
+            if preds[current_example_index].argmax() != batch[1][current_example_index]: 
                 break
             iters +=1
+            # 根据论文中6.1节中公式，找到对预测最重要的神经元/通道，并将其置零
             max_val, max_param_name, max_param_index = get_most_activated_node(model, grads_list, channel_wise = channel_wise)
-            model = modify_weights(model, max_param_name, max_param_index, channel_wise = channel_wise, objective = objective, grads_list = grads_list, preds = (preds[current_example_index], batch[1][current_example_index]))
+            model = modify_weights(model, max_param_name, max_param_index, channel_wise = channel_wise, grads_list = grads_list, preds = (preds[current_example_index], batch[1][current_example_index]))
             param_names.append(max_param_name)
-            
+        # 对于该样本的预测已经被反转，评估此时模型在训练集上的准确率 
         if eval_post_edit:
             rets = eval(model, loader, eval_mode=True)
             rets["clean_accuracy"] = rets["acc_mask"][noise_mask == 0].mean()
@@ -185,31 +193,36 @@ def flip_preds(saved_model, loader, example_type, noise_mask, rare_mask = None, 
     accs_list, iters_list, params_list, ids_list = [], [], [], []
     noisy_acc_list, clean_acc_list = [], []
 
+    # 干净样本，噪声样本，稀有样本的掩码
     clean_mask = ~(noise_mask.bool() + rare_mask.bool()) if rare_mask is not None else ~ (noise_mask.bool())
     mask = {"clean":clean_mask, "noisy":noise_mask, "rare":rare_mask}[example_type]
 
-    
+    # 已经分析的样本数量
     num_examples_analyzed = 0
 
     while num_examples_analyzed < num_examples:
-        batch = next(iter(loader))
+        batch = next(iter(loader)) # 从loader中取出一个batch
+        # batch[0]其实是batch中的图像，形状为(batch_size, channel, height, width)
+        # 这里的all_ids其实就相当于np.arange(batch_size)
         all_ids = torch.arange(batch[0].shape[0])
+        # batch_mask的形状为(batch_size, )，取值为0或1，表示该样本是否有效
         batch_mask = mask[batch[2]]
        
-        # Parallelize the for loop
-        # how many valid indices does the batch have for the current example type?
+        # 剩余的样本数量
         num_remaining = num_examples - num_examples_analyzed
+        # 这个batch中有效(需要分析)的样本数量
         num_valid_datapoints_in_batch = min(all_ids[batch_mask == 1].shape[0],num_remaining)
+        # 将这些样本分成n_parallel份，后面会用多线程并行处理，但其实默认n_parallel=1，所以默认没有多线程
         num_valid_datapoints_per_job = num_valid_datapoints_in_batch//n_parallel
-        #split the data points across the threads
         indices = np.arange(num_valid_datapoints_in_batch)   
         ind_arglist = [indices[k*num_valid_datapoints_per_job:(k+1)*num_valid_datapoints_per_job] for k in range(n_parallel)]
         arglist = [(saved_model, loader, batch, ind, batch_mask, eval_post_edit, channel_wise, objective, gaussian_noise, verbose, n_EoT, noise_mask) for ind in ind_arglist]
 
+        # 开启线程池，多线程并行处理
         pool = ThreadPool()     #(initializer=init_processes, initargs=(globVar,))
         result = pool.starmap(flip_preds_loop_helper, arglist)
-        # import ipdb; ipdb.set_trace()
         
+        # 汇总结果
         accs_list_temp, iters_list_temp, params_list_temp, ids_list_temp, n_acc_l_temp, c_acc_l_temp = [x[0] for x in result], [x[1] for x in result], [x[2] for x in result], [x[3] for x in result], [x[4] for x in result], [x[5] for x in result] 
         accs_list_temp, iters_list_temp, params_list_temp, ids_list_temp, n_acc_l_temp, c_acc_l_temp = concat_list(accs_list_temp), concat_list(iters_list_temp), concat_list(params_list_temp), concat_list(ids_list_temp), concat_list(n_acc_l_temp), concat_list(c_acc_l_temp)
 
@@ -223,6 +236,11 @@ def flip_preds(saved_model, loader, example_type, noise_mask, rare_mask = None, 
 
         num_examples_analyzed += num_valid_datapoints_in_batch
 
+    # param_list: (num_examples, 需要反转的神经元数量)
+    # accs_list: (num_examples, )
+    # iters_list: (num_examples, )
+    # noisy_acc_list: (num_examples, )
+    # clean_acc_list: (num_examples, )
     return {"accuracy":accs_list, "iters":iters_list, "params":params_list, "ids": ids_list, "noisy_acc":noisy_acc_list, "clean_acc":clean_acc_list}
 
 def concat_list(a):
