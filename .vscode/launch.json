@@ -1,0 +1,159 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "plotter",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiments/plotter.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "${workspaceFolder}/logs/cifar10/resnet9_lr_0.01_noise_0.1_resnet9_cosine_seed_4_aug_0_cscore_0.0"
+            ]
+        },
+        {
+            "name": "train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+            "args": [
+                "--from_dir_name",
+                "logs/cifar10/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_5_aug_0",
+                "--batch_size",
+                "2048",
+                "--num_epochs",
+                "100"
+            ]
+        },
+        {
+            "name": "rewinding",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiments/rewinding.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+            "args": [
+                "--from_dir_name",
+                "logs/mnist/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_5_aug_0_cscore_0.0",
+                "--batch_size",
+                "8192",
+            ]
+        },
+        {
+            "name": "retraining",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiments/retraining.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+            "args": [
+                "--from_dir_name",
+                "logs/mnist/resnet9_lr_0.01_noise_0.1_resnet50_cosine_seed_5_aug_0_cscore_0.0",
+                "--batch_size",
+                "2048",
+            ]
+        },
+        {
+            "name": "plotter2",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiments/plotter2.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+        },
+        {
+            "name": "neuron_flipping_train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiments/neuron_flipping/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/stage2",
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+            "args": [
+                "--dataset1",
+                "cifar10",
+                "--model_type",
+                "resnet9",
+                "--lr1",
+                "0.01",
+                "--noise_1",
+                "0.1",
+                "--sched",
+                "cosine",
+                "--seed",
+                "4",
+                "--model_seed",
+                "4",
+                "--batch_size",
+                "2048",
+            ]
+        },
+        {
+            "name": "analyze_flipping_difficulty",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiments/neuron_flipping/analyze_flipping_difficulty.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+            "args": [
+                "--from_dir_name",
+                "logs/cifar10/resnet9_lr_0.01_noise_0.1_resnet9_cosine_seed_4_aug_0_cscore_0",
+                "--example_type",
+                "clean"
+            ]
+        },
+        {
+            "name": "plotter3",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/experiments/plotter3.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+        },
+        {
+            "name": "example_tied_drouput_test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/example_tied_drouput_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}",
+            "env":{
+                "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/models"
+            },
+        },
+    ]
+}

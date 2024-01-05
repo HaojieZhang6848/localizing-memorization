@@ -4,3 +4,6 @@ data/
 # 忽略所有.pyc文件
 *.pyc
 **/__pycache__/
+
+# 忽略plots
+plots/
