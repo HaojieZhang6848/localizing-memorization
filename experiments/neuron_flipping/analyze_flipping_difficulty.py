@@ -65,7 +65,7 @@ train_loader = pre_dict["train_loader"]
 print (f"Initial accuracy on training set = {eval(saved_model, train_loader, eval_mode = True)['accuracy']}")
 
 
-num_examples = 1000
+num_examples = 200
 
 
 # channel_wise = channel, weight
